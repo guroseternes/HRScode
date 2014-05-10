@@ -12,6 +12,7 @@
 //Block sizes
 // For flux function
 const int BLOCKDIM = 16;
+const int SM_BLOCKDIM_Y = BLOCKDIM + 1;
 const int TILEDIM = BLOCKDIM-2;
 const int INNERTILEDIM = TILEDIM-2;
 

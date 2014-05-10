@@ -204,7 +204,7 @@ inline __device__ float limiter(float u_plus, float u_center, float u_minus){
 	return minmod(flux_ctx.theta*(u_plus-u_center),(u_plus-u_minus)*0.5f, flux_ctx.theta*(u_center-u_minus));
 }
 
-inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM][BLOCKDIM], float (&Ux)[4][BLOCKDIM][BLOCKDIM], float (&Uy)[4][BLOCKDIM][BLOCKDIM], unsigned int i, unsigned int j){
+inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Uy)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 	float u_center,u_south,u_north,u_east,u_west;
 
 	float ux_out, uy_out;
@@ -226,7 +226,7 @@ inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM][BLOCKDIM], fl
 				
 }
 
-inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM][BLOCKDIM], float (&Ux)[4][BLOCKDIM][BLOCKDIM], unsigned int i, unsigned int j){
+inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 	
 	float U0m, U1m, U2m, U3m;
 	float U0p, U1p, U2p, U3p;
@@ -266,7 +266,7 @@ inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM][BLOCKDIM], float
 	return flux_ctx.dx/fmaxf(ap, -am);
 }
  	
-inline __device__ float computeFluxSouth(float (&U)[4][BLOCKDIM][BLOCKDIM],float (&Uy)[4][BLOCKDIM][BLOCKDIM], unsigned int i, unsigned int j){
+inline __device__ float computeFluxSouth(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y],float (&Uy)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 
         float U0m, U1m, U2m, U3m;
         float U0p, U1p, U2p, U3p;
@@ -332,9 +332,9 @@ __global__ void fluxKernel(int step){
 	for (int i = 0; i<BLOCKDIM*BLOCKDIM; i++)
 		Bi[0][i] = FLT_MAX;
 		
-	__shared__ float local_U[4][BLOCKDIM][BLOCKDIM];
-	__shared__ float local_Ux[4][BLOCKDIM][BLOCKDIM];
-	__shared__ float local_Uy[4][BLOCKDIM][BLOCKDIM];
+	__shared__ float local_U[4][BLOCKDIM][SM_BLOCKDIM_Y];
+	__shared__ float local_Ux[4][BLOCKDIM][SM_BLOCKDIM_Y];
+	__shared__ float local_Uy[4][BLOCKDIM][SM_BLOCKDIM_Y];
 
 	local_U[0][i][j] = global_index(flux_ctx.U0.ptr, flux_ctx.U0.pitch, xid, yid, global_border)[0];
 	local_U[1][i][j] = global_index(flux_ctx.U1.ptr, flux_ctx.U1.pitch, xid, yid, global_border)[0];
