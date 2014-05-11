@@ -24,6 +24,7 @@ void init_allocate(){
 __global__ void RKKernel(int step){ 
 	
 	float dt = rk_ctx.dt[0];
+//	dt = 0.0006;
 	//printf("TIME %.6f\n", dt);
 	float u0,u1,u2,u3,r0,r1,r2,r3,q0,q1,q2,q3;
 	int global_border = rk_ctx.global_border;
@@ -191,20 +192,44 @@ inline __device__ float maxEigenVal(float a, float b) {
 	return fmaxf(fmaxf(a, b), 0.0f);
 }
 
+inline __device__ float sign(float& a) {
+	/**
+	  * The following works by bit hacks. In non-obfuscated code, something like
+	  *  float r = ((int&)a & 0x7FFFFFFF)!=0; //set r to one or zero
+	  *  (int&)r |= ((int&)a & 0x80000000);   //Copy sign bit of a
+	  *  return r;
+	  */
+#ifndef NEW_SIGN
+	return (signed((int&)a & 0x80000000) >> 31 ) | ((int&)a & 0x7FFFFFFF)!=0;
+#else
+	float r = ((int&)a & 0x7FFFFFFF)!=0;
+	return copysignf(r, a);
+#endif
+}
+
+
 inline __device__ float minmod(float a, float b, float c){
-	if ( a > 0 && b > 0 && c > 0)
+	return 0.25f
+	*sign(a)
+	*(sign(a) + sign(b))
+	*(sign(b) + sign(c))
+	*fminf( fminf(fabsf(a), fabsf(b)), fabsf(c) );
+
+
+/*	if ( a > 0 && b > 0 && c > 0)
 		return fminf(c,fminf(a,b));
 	else if ( a < 0 && b < 0 && c < 0)
 		return fmaxf(c,fmaxf(a,b));
 	else
 		return 0.0;
+*/
 }
 
 inline __device__ float limiter(float u_plus, float u_center, float u_minus){
 	return minmod(flux_ctx.theta*(u_plus-u_center),(u_plus-u_minus)*0.5f, flux_ctx.theta*(u_center-u_minus));
 }
 
-inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Uy)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
+inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], float (&Uy)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 	float u_center,u_south,u_north,u_east,u_west;
 
 	float ux_out, uy_out;
@@ -226,7 +251,7 @@ inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y
 				
 }
 
-inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
+inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 	
 	float U0m, U1m, U2m, U3m;
 	float U0p, U1p, U2p, U3p;
@@ -266,7 +291,7 @@ inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y], 
 	return flux_ctx.dx/fmaxf(ap, -am);
 }
  	
-inline __device__ float computeFluxSouth(float (&U)[4][BLOCKDIM][SM_BLOCKDIM_Y],float (&Uy)[4][BLOCKDIM][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
+inline __device__ float computeFluxSouth(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y],float (&Uy)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
 
         float U0m, U1m, U2m, U3m;
         float U0p, U1p, U2p, U3p;
@@ -313,8 +338,8 @@ __global__ void fluxKernel(int step){
 	float dy = flux_ctx.dy;
  
 	// Global indexes, multiply by tiledim because each block has a halo/border	
-	int xid = blockIdx.x*INNERTILEDIM + threadIdx.x - global_border;
-	int yid = blockIdx.y*INNERTILEDIM + threadIdx.y - global_border;
+	int xid = blockIdx.x*INNERTILEDIM_X + threadIdx.x - global_border;
+	int yid = blockIdx.y*INNERTILEDIM_Y + threadIdx.y - global_border;
 
 	//xid = fminf(xid, flux_ctx.nx+global_border-1);
 	//yid = fminf(yid, flux_ctx.ny+global_border-1);
@@ -326,15 +351,14 @@ __global__ void fluxKernel(int step){
 	float r = FLT_MAX;
 	float r0, r1, r2, r3;
 
-	const int nthreads = BLOCKDIM*BLOCKDIM;
+	const int nthreads = BLOCKDIM_X*BLOCKDIM_Y;
 	
-	__shared__ float Bi[BLOCKDIM][BLOCKDIM];
-	for (int i = 0; i<BLOCKDIM*BLOCKDIM; i++)
-		Bi[0][i] = FLT_MAX;
+	__shared__ float timeStep[BLOCKDIM_X][BLOCKDIM_Y];
+	timeStep[i][j] = FLT_MAX;
 		
-	__shared__ float local_U[4][BLOCKDIM][SM_BLOCKDIM_Y];
-	__shared__ float local_Ux[4][BLOCKDIM][SM_BLOCKDIM_Y];
-	__shared__ float local_Uy[4][BLOCKDIM][SM_BLOCKDIM_Y];
+	__shared__ float local_U[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
+	__shared__ float local_Ux[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
+	__shared__ float local_Uy[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
 
 	local_U[0][i][j] = global_index(flux_ctx.U0.ptr, flux_ctx.U0.pitch, xid, yid, global_border)[0];
 	local_U[1][i][j] = global_index(flux_ctx.U1.ptr, flux_ctx.U1.pitch, xid, yid, global_border)[0];
@@ -342,35 +366,26 @@ __global__ void fluxKernel(int step){
 	local_U[3][i][j] = global_index(flux_ctx.U3.ptr, flux_ctx.U3.pitch, xid, yid, global_border)[0];	
 	
 	__syncthreads();
-/*	
-	if (local_U[0][i][j] == 0){
-	//	global_index(flux_ctx.U3.ptr, flux_ctx.U3.pitch, xid, yid, global_border)[0] = 100;	
-		printf ("ZERO LOCAL U step");
-	}
-*/	
-//	if (xid > -3 && xid < flux_ctx.nx+1 && yid > -3 && yid < flux_ctx.ny+1){
-	//	if ( i > -1 && i < BLOCKDIM  && j > -1 && j < BLOCKDIM)
-		//	global_index(flux_ctx.R0.ptr, flux_ctx.R0.pitch, xid, yid, global_border)[0] = xid;		
-//	}
-	if ( i > 0 && i < BLOCKDIM - 1 && j > 0 && j < BLOCKDIM - 1){
+
+	if ( i > 0 && i < BLOCKDIM_X - 1 && j > 0 && j < BLOCKDIM_Y - 1){
 		reconstructPointVal(local_U, local_Ux, local_Uy, i, j);
 	}
 
 	__syncthreads();
 
 	
-	if ( i > 1 && i < TILEDIM + 1 && j > 1 && j < TILEDIM)
+	if ( i > 1 && i < TILEDIM_X + 1 && j > 1 && j < TILEDIM_Y)
 		r = min(r, computeFluxWest(local_U, local_Ux, i, j));
-	if ( i > 1 && i < TILEDIM  && j > 1 && j < TILEDIM + 1)
+	if ( i > 1 && i < TILEDIM_X  && j > 1 && j < TILEDIM_Y + 1)
 		r = computeFluxSouth(local_U, local_Uy, i, j);
 
-	if (j == TILEDIM + 1 || i == TILEDIM +1)
+	if (j == TILEDIM_Y + 1 || i == TILEDIM_X +1)
 		r = FLT_MAX;
 	
 	__syncthreads();
 	
 	if (xid > -1 && xid < flux_ctx.nx && yid > -1 && yid < flux_ctx.ny){
-		if ( i > 1 && i < TILEDIM  && j > 1 && j < TILEDIM){
+		if ( i > 1 && i < TILEDIM_X  && j > 1 && j < TILEDIM_Y){
 
 			r0 = (local_Ux[0][i][j] - local_Ux[0][i+1][j])/dx + (local_Uy[0][i][j] - local_Uy[0][i][j+1])/dy;	
 			r1 = (local_Ux[1][i][j] - local_Ux[1][i+1][j])/dx + (local_Uy[1][i][j] - local_Uy[1][i][j+1])/dy;   
@@ -387,16 +402,14 @@ __global__ void fluxKernel(int step){
 //Now, find and write out the maximal eigenvalue in this block
 	if (step==0) {
 		__syncthreads();
-		volatile float* B_volatile = Bi[0];
+		volatile float* B_volatile = timeStep[0];
 		int p = threadIdx.y*blockDim.x+threadIdx.x; //reuse p for indexing
 		//printf(" %i ", p);
 		//Write the maximum eigenvalues computed by this thread into shared memory
 		//Only consider eigenvalues within the internal domain
 		if (xid < flux_ctx.nx && yid < flux_ctx.ny && xid >= 0 && yid >=0){
-			Bi[0][p] = r; 
-		} else
-			Bi[0][p] = FLT_MAX;
-		
+			timeStep[0][p] = r; 
+		}	
 		__syncthreads();		
 		
 		//First use all threads to reduce min(1024, nthreads) values into 64 values
@@ -407,20 +420,20 @@ __global__ void fluxKernel(int step){
 			//a lot of sense for the last test where there should only be 64 active threads.
 			//The second part of this test ((p+512) < nthreads) removes the threads that would generate an
 			//out-of-bounds access to shared memory
-			if (p < 512 && (p+512) < nthreads) Bi[0][p] = fminf(Bi[0][p], Bi[0][p + 512]); //min(1024, nthreads)=>512
+			if (p < 512 && (p+512) < nthreads) timeStep[0][p] = fminf(timeStep[0][p], timeStep[0][p + 512]); //min(1024, nthreads)=>512
 			__syncthreads();
 		}
 
 		if (nthreads >= 256) { 
-			if (p < 256 && (p+256) < nthreads) Bi[0][p] = fminf(Bi[0][p], Bi[0][p + 256]); //min(512, nthreads)=>256
+			if (p < 256 && (p+256) < nthreads) timeStep[0][p] = fminf(timeStep[0][p], timeStep[0][p + 256]); //min(512, nthreads)=>256
 			__syncthreads();
 		}
 		if (nthreads >= 128) {
-			if (p < 128 && (p+128) < nthreads) Bi[0][p] = fminf(Bi[0][p], Bi[0][p + 128]); //min(256, nthreads)=>128
+			if (p < 128 && (p+128) < nthreads) timeStep[0][p] = fminf(timeStep[0][p], timeStep[0][p + 128]); //min(256, nthreads)=>128
 			__syncthreads();
 		}
 		if (nthreads >= 64) {
-			if (p < 64 && (p+64) < nthreads) Bi[0][p] = fminf(Bi[0][p], Bi[0][p + 64]); //min(128, nthreads)=>64
+			if (p < 64 && (p+64) < nthreads) timeStep[0][p] = fminf(timeStep[0][p], timeStep[0][p + 64]); //min(128, nthreads)=>64
 			__syncthreads();
 		}
 
@@ -435,7 +448,7 @@ __global__ void fluxKernel(int step){
 			if (nthreads >=  2) B_volatile[p] = fminf(B_volatile[p], B_volatile[p +  1]); //2=>1
 		}
 		
-		if (threadIdx.y + threadIdx.x == 0) flux_ctx.L[blockIdx.x*gridDim.x + blockIdx.y] = B_volatile[0];
+		if (threadIdx.y + threadIdx.x == 0) flux_ctx.L[blockIdx.x*gridDim.y + blockIdx.y] = B_volatile[0];
 
 	
 	}

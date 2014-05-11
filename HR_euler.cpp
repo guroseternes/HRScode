@@ -45,11 +45,12 @@ Config.set_v(vConfig19);
 
 // Determining global border based on left over tiles (a little hack)
 int globalPadding;
-int gridDimx = (nx + 2*border + INNERTILEDIM)/INNERTILEDIM;
-globalPadding = INNERTILEDIM*gridDimx -(nx+2*border);
+globalPadding = (nx+2*border+32)/32;
+globalPadding = 32*globalPadding - (nx+2*border);
+//printf("Globalpad: %i\n", globalPadding);
 
 // Change border to add padding
-border = border + globalPadding/2;
+//border = border + globalPadding/2;
 
 // Initiate the matrices for the unknowns in the Euler equations
 cpu_ptr_2D rho(nx, ny, border,1);
@@ -124,9 +125,9 @@ dim3 threadBlockFlux;
 dim3 gridBlockRK;
 dim3 threadBlockRK;
 
-computeGridBlock(gridBlockFlux, threadBlockFlux, nx + 2*border, ny + 2*border, INNERTILEDIM, BLOCKDIM);
+computeGridBlock(gridBlockFlux, threadBlockFlux, nx + 2*border, ny + 2*border, INNERTILEDIM_X, INNERTILEDIM_Y, BLOCKDIM_X, BLOCKDIM_Y);
 
-computeGridBlock(gridBlockRK, threadBlockRK, nx + 2*border, ny + 2*border, BLOCKDIM_RK, BLOCKDIM_RK);
+computeGridBlock(gridBlockRK, threadBlockRK, nx + 2*border, ny + 2*border, BLOCKDIM_X_RK, BLOCKDIM_Y_RK, BLOCKDIM_X_RK, BLOCKDIM_Y_RK);
 
 int nElements = gridBlockFlux.x*gridBlockFlux.y;
 //printf("xDim %i\t yDim %i\t", gridBlockFlux.x, threadBlockFlux.y); 
@@ -149,7 +150,7 @@ printf("2 %s\n", cudaGetErrorString(cudaGetLastError()));
 
 	cudaMalloc((void**)&dt_device, sizeof(float));
 
-printf("3 %s\n", cudaGetErrorString(cudaGetLastError()));
+//printf("3 %s\n", cudaGetErrorString(cudaGetLastError()));
 
 init_allocate();
 

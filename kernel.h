@@ -11,14 +11,20 @@
 
 //Block sizes
 // For flux function
-const int BLOCKDIM = 16;
-const int SM_BLOCKDIM_Y = BLOCKDIM + 1;
-const int TILEDIM = BLOCKDIM-2;
-const int INNERTILEDIM = TILEDIM-2;
+const int BLOCKDIM_X = 16;
+const int BLOCKDIM_Y = 16;
 
-const int BLOCKDIM_RK = 16;
+const int SM_BLOCKDIM_Y = BLOCKDIM_Y + 1;
+const int TILEDIM_X = BLOCKDIM_X-2;
+const int TILEDIM_Y = BLOCKDIM_Y-2;
 
-const int BLOCKDIM_BC = 256;
+const int INNERTILEDIM_X = TILEDIM_X-2;
+const int INNERTILEDIM_Y = TILEDIM_Y-2;
+
+const int BLOCKDIM_X_RK = 32;
+const int BLOCKDIM_Y_RK = 32;
+
+const int BLOCKDIM_BC = 512;
 
 const int TIMETHREADS = 64;
 

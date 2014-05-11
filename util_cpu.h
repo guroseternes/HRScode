@@ -114,15 +114,13 @@ void setLandDt(int nElements, float* L_host, float* L_device, float* dt_device){
 }
 
 
-void computeGridBlock(dim3& gridBlock, dim3& threadBlock, int NX, int NY, int tiledim, int blockdim){
+void computeGridBlock(dim3& gridBlock, dim3& threadBlock, int NX, int NY, int tiledimX, int tiledimY, int blockdimX, int blockdimY){
 
-        int gridDimx =  (NX + tiledim - 1)/tiledim;
-        int gridDimy =  (NY + tiledim - 1)/tiledim;
-
-	printf("Grididim %i",gridDimx);
+        int gridDimx =  (NX + tiledimX - 1)/tiledimX;
+        int gridDimy =  (NY + tiledimY - 1)/tiledimY;
                                                                                                                        
-        threadBlock.x = blockdim;
-        threadBlock.y = blockdim;
+        threadBlock.x = blockdimX;
+        threadBlock.y = blockdimY;
         gridBlock.x = gridDimx;
         gridBlock.y = gridDimy;
 }
