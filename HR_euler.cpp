@@ -160,8 +160,8 @@ set_bc_args(BCArgs[1], Q0.getRawPtr(), Q1.getRawPtr(), Q2.getRawPtr(), Q3.getRaw
 set_bc_args(BCArgs[2], rho_device.getRawPtr(), rho_u_device.getRawPtr(), rho_v_device.getRawPtr(), E_device.getRawPtr(), nx+2*border, ny+2*border, border);
 
 // Set FLUX arguments
-set_flux_args(fluxArgs[0], L_device, rho_device.getRawPtr(), rho_u_device.getRawPtr(), rho_v_device.getRawPtr(), E_device.getRawPtr(), R0.getRawPtr(),R1.getRawPtr(), R2.getRawPtr(), R3.getRawPtr(), nx, ny, border, rho.get_dx(), rho.get_dy(), theta, gamma);
-set_flux_args(fluxArgs[1], L_device, Q0.getRawPtr(), Q1.getRawPtr(), Q2.getRawPtr(), Q3.getRawPtr(), R0.getRawPtr(),R1.getRawPtr(), R2.getRawPtr(), R3.getRawPtr(), nx, ny, border, rho.get_dx(), rho.get_dy(), theta, gamma);
+set_flux_args(fluxArgs[0], L_device, rho_device.getRawPtr(), rho_u_device.getRawPtr(), rho_v_device.getRawPtr(), E_device.getRawPtr(), R0.getRawPtr(),R1.getRawPtr(), R2.getRawPtr(), R3.getRawPtr(), nx, ny, border, rho.get_dx(), rho.get_dy(), theta, gamma, INNERTILEDIM_X, INNERTILEDIM_Y);
+set_flux_args(fluxArgs[1], L_device, Q0.getRawPtr(), Q1.getRawPtr(), Q2.getRawPtr(), Q3.getRawPtr(), R0.getRawPtr(),R1.getRawPtr(), R2.getRawPtr(), R3.getRawPtr(), nx, ny, border, rho.get_dx(), rho.get_dy(), theta, gamma, INNERTILEDIM_X, INNERTILEDIM_Y);
 
 // Set TIME argument
 set_dt_args(dtArgs, L_device, dt_device, nElements, rho.get_dx(), rho.get_dy(), cfl_number);

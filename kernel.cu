@@ -149,11 +149,7 @@ inline __device__ void fluxAndLambdaFuncF(float& rho, float& U1, float& U2, floa
 	v = U2/rho;
 	E = U3;
         pressure = (gamma - 1.0f)*(E-0.5f*rho*(u*u + v*v));
-	//printf("rho %.3f\t pressure: %.3f\t gamma: %.3f\t", rho, pressure, gamma);
         c = sqrtf(gamma*pressure/rho);	      
-
-//	if (pressure < 0)
-//		printf("ZERO alert compute F and Lambda gamma:%.3f pressure: %.3f rho:%.3f  rho_u:%.3f rho_v%.3f E%.3f\n", gamma,pressure,rho,U1,U2,E);
 
 	// Flux computation
 	F0 = U1;
@@ -338,8 +334,8 @@ __global__ void fluxKernel(int step){
 	float dy = flux_ctx.dy;
  
 	// Global indexes, multiply by tiledim because each block has a halo/border	
-	int xid = blockIdx.x*INNERTILEDIM_X + threadIdx.x - global_border;
-	int yid = blockIdx.y*INNERTILEDIM_Y + threadIdx.y - global_border;
+	int xid = blockIdx.x*flux_ctx.innerDimX + threadIdx.x - global_border;
+	int yid = blockIdx.y*flux_ctx.innerDimY + threadIdx.y - global_border;
 
 	//xid = fminf(xid, flux_ctx.nx+global_border-1);
 	//yid = fminf(yid, flux_ctx.ny+global_border-1);
@@ -379,9 +375,11 @@ __global__ void fluxKernel(int step){
 	if ( i > 1 && i < TILEDIM_X  && j > 1 && j < TILEDIM_Y + 1)
 		r = computeFluxSouth(local_U, local_Uy, i, j);
 
-	if (j == TILEDIM_Y + 1 || i == TILEDIM_X +1)
-		r = FLT_MAX;
+//	if (j == TILEDIM_Y + 1 || i == TILEDIM_X +1)
+//		r = FLT_MAX;
 	
+	int p = threadIdx.y*blockDim.x+threadIdx.x;
+
 	__syncthreads();
 	
 	if (xid > -1 && xid < flux_ctx.nx && yid > -1 && yid < flux_ctx.ny){
@@ -396,20 +394,24 @@ __global__ void fluxKernel(int step){
 			global_index(flux_ctx.R1.ptr, flux_ctx.R1.pitch, xid, yid, global_border)[0] = r1;
 			global_index(flux_ctx.R2.ptr, flux_ctx.R2.pitch, xid, yid, global_border)[0] = r2;
 			global_index(flux_ctx.R3.ptr, flux_ctx.R3.pitch, xid, yid, global_border)[0] = r3;//local_Uy[0][i][j];
+				
+			timeStep[0][p] = r;
+
 		}
 	}
 
 //Now, find and write out the maximal eigenvalue in this block
 	if (step==0) {
-		__syncthreads();
+	//	__syncthreads();
 		volatile float* B_volatile = timeStep[0];
-		int p = threadIdx.y*blockDim.x+threadIdx.x; //reuse p for indexing
+		//int p = threadIdx.y*blockDim.x+threadIdx.x; //reuse p for indexing
 		//printf(" %i ", p);
 		//Write the maximum eigenvalues computed by this thread into shared memory
 		//Only consider eigenvalues within the internal domain
-		if (xid < flux_ctx.nx && yid < flux_ctx.ny && xid >= 0 && yid >=0){
+	/*	if (xid < flux_ctx.nx && yid < flux_ctx.ny && xid >= 0 && yid >=0){
 			timeStep[0][p] = r; 
 		}	
+	*/
 		__syncthreads();		
 		
 		//First use all threads to reduce min(1024, nthreads) values into 64 values

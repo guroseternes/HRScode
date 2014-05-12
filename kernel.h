@@ -26,7 +26,7 @@ const int BLOCKDIM_Y_RK = 32;
 
 const int BLOCKDIM_BC = 512;
 
-const int TIMETHREADS = 64;
+const int TIMETHREADS = 512;
 
 // Constants for the method
 const float THETA = 1.5; //minmod limiter parameter
