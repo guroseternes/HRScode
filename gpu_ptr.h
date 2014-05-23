@@ -158,4 +158,53 @@ inline void gpu_ptr_2D::set(float value, unsigned int x_offset, unsigned int y_o
 	cudaMemcpy2D(ptr1, pitch1, ptr2, pitch2, width*sizeof(float), height, cudaMemcpyHostToDevice);
 }
 
+class gpu_ptr_1D{
+public:
+	gpu_ptr_1D(unsigned int width, float* cpu_ptr=NULL);
+	~gpu_ptr_1D();
+	//void download(float* cpu_ptr, unsigned int x_offset=0, unsigned int width=0);
+	void upload(const float* cpu_ptr, unsigned int x_offset=0, unsigned int width=0);
+	//void set(int value, unsigned int x_offset=0, unsigned int width=0);
+	void set(float value, unsigned int x_offset=0, unsigned int width=0);
+	float* getRawPtr() const {
+		return data_ptr;
+	}
+	const unsigned int& getWidth() const {
+		return data_width;
+	}
+
+private:
+	float* data_ptr;
+	unsigned int data_width;
+};
+
+inline void gpu_ptr_1D::upload(const float* cpu_ptr, unsigned int x_offset, unsigned int width) {
+	width = (width == 0) ? data_width : width;
+
+	float* ptr1 = data_ptr + x_offset;
+	const float* ptr2 = cpu_ptr;
+
+	cudaMemcpy(ptr1, ptr2, width*sizeof(float), cudaMemcpyHostToDevice);
+}
+
+inline gpu_ptr_1D::gpu_ptr_1D(unsigned int width, float* cpu_ptr) {
+	data_width = width;
+	data_ptr = 0;
+	cudaMalloc((void**) &data_ptr, data_width*sizeof(float));
+	if (cpu_ptr != NULL) upload(cpu_ptr);
+}
+
+inline gpu_ptr_1D::~gpu_ptr_1D() {
+	cudaFree(data_ptr);
+}
+
+inline void gpu_ptr_1D::set(float value, unsigned int x_offset, unsigned int width) {
+	width = (width == 0) ? data_width : width;
+
+	float* ptr = data_ptr + x_offset;
+	std::vector<float> tmp(width, value);
+
+	cudaMemcpy(ptr, &tmp[0], width*sizeof(float), cudaMemcpyHostToDevice);
+}
+
 #endif

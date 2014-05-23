@@ -18,6 +18,8 @@ public:
 
 	// Deconstructor
 	~cpu_ptr_2D();
+	
+	float xmin, xmax, ymin, ymax;
 
 	int get_nx();
 	int get_ny();
@@ -26,9 +28,9 @@ public:
 	float get_dy();
 
 	float* get_ptr(){return data;};
-	
+
 	void set_time(float time);
-	
+
 	cpu_ptr_2D& operator=(const cpu_ptr_2D& rhs);
 
 	// Access elements
@@ -38,7 +40,6 @@ public:
 
 private:
 	unsigned int nx, ny, border, NX, NY;
-	float xmin, xmax, ymin, ymax;
 	float time;
 	float *data;
  	void allocateMemory();
@@ -66,7 +67,7 @@ cpu_ptr_2D::cpu_ptr_2D(const cpu_ptr_2D& other):nx(other.nx),ny(other.ny),border
 		data[i] = other.data[i];
 	}
 }
-	
+
 cpu_ptr_2D::~cpu_ptr_2D(){
 	delete [] data;
 }
@@ -123,7 +124,7 @@ void cpu_ptr_2D::printToFile(FILE* filePtr, bool withHeader, bool withBorder){
 		}
 		for (int j=0; j<nx; j++){
 			for (int i=0; i<nx; i++){
-				fprintf(filePtr, "%.3f\t%.3f\t%.3f\t%.3f\n", time, dx*i, dy*j, this->operator()(i,j));
+				fprintf(filePtr, "%.3f\t%.3f\t%.3f\t%.3f\n", time, xmin + dx*i, ymin + dy*j, this->operator()(i,j));
 			}
 		}
 	}else{
@@ -133,10 +134,10 @@ void cpu_ptr_2D::printToFile(FILE* filePtr, bool withHeader, bool withBorder){
 		}
 		for (int j=0; j<NY; j++){
 			for (int i=0; i<NX; i++){
-				fprintf(filePtr, "%.3f\t%.3f\t%.3f\t%.3f\n", time, dx*i-dx*border, dy*j-dy*border, this->operator()(i-border,j-border));
+				fprintf(filePtr, "%.3f\t%.3f\t%.3f\t%.3f\n", time, xmin + dx*i-dx*border, ymin + dy*j-dy*border, this->operator()(i-border,j-border));
 			}
 		}
-		
+
 	}
 
 }

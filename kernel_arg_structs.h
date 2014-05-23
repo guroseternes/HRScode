@@ -53,8 +53,12 @@ struct  FluxKernelArgs {
         unsigned int nx;               //!< Domain size without ghost cells
         unsigned int ny;               //!< Domain size without ghost cells
 	int global_border;		//!< Ghost cell border
-        float gamma; 
-	float theta;                      //!< For min-mod function
+       	
+	float gamma; 
+	float theta; 
+
+	int innerDimX;
+	int innerDimY;                     //!< For min-mod function
 };
 
 #endif /* KARGS_H_ */

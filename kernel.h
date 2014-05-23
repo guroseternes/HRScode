@@ -38,7 +38,8 @@ const float GAMMA = 1.4; //gas constant
 extern int nElements;
 
 // Pointer to store the dt-value f
-extern float* dt_device;
+//extern float* dt_device;
+extern float* dt_host;
 
 // Kernel arguments
 extern collBCKernelArgs* BCArgs[3];
@@ -68,6 +69,8 @@ void callCollectiveSetBCWall(dim3 grid, dim3 block, const collBCKernelArgs* h_ct
 void callFluxKernel(dim3 grid, dim3 block, int step, FluxKernelArgs* FluxArgs);
 
 void callCollectiveSetBCOpen(dim3 grid, dim3 block, const collBCKernelArgs* arg);
+
+void callCollectiveSetBCPeriodic(dim3 grid, dim3 block, const collBCKernelArgs* arg);
 
 #endif
 

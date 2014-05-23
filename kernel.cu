@@ -17,12 +17,14 @@ void init_allocate(){
 		cudaHostAlloc(&RKArgs[i], sizeof(RKKernelArgs), cudaHostAllocWriteCombined);
 
 		cudaHostAlloc(&dtArgs, sizeof(DtKernelArgs), cudaHostAllocWriteCombined);
+
+		cudaHostAlloc(&dt_host, sizeof(float), cudaHostAllocWriteCombined);
 		//cudaMallocHost(&fluxArgs[i], sizeof(FluxKernelArgs));
 	}
 }
-	
+
 __global__ void RKKernel(int step){ 
-	
+
 	float dt = rk_ctx.dt[0];
 //	dt = 0.0006;
 	//printf("TIME %.6f\n", dt);
@@ -56,7 +58,7 @@ __global__ void RKKernel(int step){
         	q1 = global_index(rk_ctx.Q1.ptr, rk_ctx.Q1.pitch, xid, yid, global_border)[0];
         	q2 = global_index(rk_ctx.Q2.ptr, rk_ctx.Q2.pitch, xid, yid, global_border)[0];
         	q3 = global_index(rk_ctx.Q3.ptr, rk_ctx.Q3.pitch, xid, yid, global_border)[0];
-	
+
 		q0 = 0.5f*(q0 + (u0 + dt*r0));
 		q1 = 0.5f*(q1 + (u1 + dt*r1));
 		q2 = 0.5f*(q2 + (u2 + dt*r2));
@@ -75,7 +77,7 @@ void callRKKernel(dim3 grid, dim3 block, int step, RKKernelArgs* h_ctx){
 }
 
 __global__ void DtKernel(int nThreads){
-	
+
 	extern __shared__ float sdata[];
 	volatile float* sdata_volatile = sdata;
 	unsigned int tid = threadIdx.x;
@@ -129,7 +131,7 @@ __global__ void DtKernel(int nThreads){
 		}
 	}
 }
-	
+
 
 void callDtKernel(int nThreads, DtKernelArgs* h_ctx){
 
@@ -236,7 +238,7 @@ inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM
                         u_north = U[l][i][j+1];
                         u_west = U[l][i-1][j];
                         u_east = U[l][i+1][j];
-			
+
 			// Compute interface values, each cell computes 
                         ux_out = 0.5f*limiter(u_east, u_center, u_west);
                         uy_out = 0.5f*limiter(u_north, u_center, u_south);
@@ -244,24 +246,24 @@ inline __device__ void reconstructPointVal(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM
 			Ux[l][i][j] = ux_out;
 			Uy[l][i][j] = uy_out;			
 	}
-				
+
 }
 
 inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], float (&Ux)[4][BLOCKDIM_X][SM_BLOCKDIM_Y], unsigned int i, unsigned int j){
-	
+
 	float U0m, U1m, U2m, U3m;
 	float U0p, U1p, U2p, U3p;
 	float FG0p, FG1p, FG2p, FG3p;
 	float FG0m, FG1m, FG2m, FG3m;
 	float up,vp,cp,um,vm,cm;
 	float am, ap;
-	
+
 	// The eastern reconstruction point of u(i-1,j)
 	U0m = U[0][i-1][j] + Ux[0][i-1][j];
 	U1m = U[1][i-1][j] + Ux[1][i-1][j];
 	U2m = U[2][i-1][j] + Ux[2][i-1][j];
 	U3m = U[3][i-1][j] + Ux[3][i-1][j];
-	
+
 	// The western reconstruction point of u(i,j)
 	U0p = U[0][i][j] - Ux[0][i][j];
         U1p = U[1][i][j] - Ux[1][i][j];
@@ -278,12 +280,12 @@ inline __device__ float computeFluxWest(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y]
 
 
 	__syncthreads();
-	
+
 	Ux[0][i][j] = ((ap*FG0m -am*FG0p) + ap*am*(U0p-U0m))/(ap-am);
 	Ux[1][i][j] = ((ap*FG1m -am*FG1p) + ap*am*(U1p-U1m))/(ap-am);
 	Ux[2][i][j] = ((ap*FG2m -am*FG2p) + ap*am*(U2p-U2m))/(ap-am);
 	Ux[3][i][j] = ((ap*FG3m -am*FG3p) + ap*am*(U3p-U3m))/(ap-am);
-	
+
 	return flux_ctx.dx/fmaxf(ap, -am);
 }
  	
@@ -326,9 +328,6 @@ inline __device__ float computeFluxSouth(float (&U)[4][BLOCKDIM_X][SM_BLOCKDIM_Y
 
 __global__ void fluxKernel(int step){
 
-
-//	printf("nx: %i ny: %i\n",flux_arg_ctx.nx,flux_arg_ctx.ny);	
-	
 	int global_border = flux_ctx.global_border;
 	float dx = flux_ctx.dx;
 	float dy = flux_ctx.dy;
@@ -339,7 +338,7 @@ __global__ void fluxKernel(int step){
 
 	//xid = fminf(xid, flux_ctx.nx+global_border-1);
 	//yid = fminf(yid, flux_ctx.ny+global_border-1);
-	
+
 	// Local id
 	int i = threadIdx.x;
 	int j = threadIdx.y;
@@ -348,10 +347,10 @@ __global__ void fluxKernel(int step){
 	float r0, r1, r2, r3;
 
 	const int nthreads = BLOCKDIM_X*BLOCKDIM_Y;
-	
+
 	__shared__ float timeStep[BLOCKDIM_X][BLOCKDIM_Y];
 	timeStep[i][j] = FLT_MAX;
-		
+
 	__shared__ float local_U[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
 	__shared__ float local_Ux[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
 	__shared__ float local_Uy[4][BLOCKDIM_X][SM_BLOCKDIM_Y];
@@ -360,7 +359,7 @@ __global__ void fluxKernel(int step){
 	local_U[1][i][j] = global_index(flux_ctx.U1.ptr, flux_ctx.U1.pitch, xid, yid, global_border)[0];
 	local_U[2][i][j] = global_index(flux_ctx.U2.ptr, flux_ctx.U2.pitch, xid, yid, global_border)[0];
 	local_U[3][i][j] = global_index(flux_ctx.U3.ptr, flux_ctx.U3.pitch, xid, yid, global_border)[0];	
-	
+
 	__syncthreads();
 
 	if ( i > 0 && i < BLOCKDIM_X - 1 && j > 0 && j < BLOCKDIM_Y - 1){
@@ -369,19 +368,16 @@ __global__ void fluxKernel(int step){
 
 	__syncthreads();
 
-	
+
 	if ( i > 1 && i < TILEDIM_X + 1 && j > 1 && j < TILEDIM_Y)
 		r = min(r, computeFluxWest(local_U, local_Ux, i, j));
 	if ( i > 1 && i < TILEDIM_X  && j > 1 && j < TILEDIM_Y + 1)
 		r = computeFluxSouth(local_U, local_Uy, i, j);
 
-//	if (j == TILEDIM_Y + 1 || i == TILEDIM_X +1)
-//		r = FLT_MAX;
-	
 	int p = threadIdx.y*blockDim.x+threadIdx.x;
 
 	__syncthreads();
-	
+
 	if (xid > -1 && xid < flux_ctx.nx && yid > -1 && yid < flux_ctx.ny){
 		if ( i > 1 && i < TILEDIM_X  && j > 1 && j < TILEDIM_Y){
 
@@ -389,12 +385,12 @@ __global__ void fluxKernel(int step){
 			r1 = (local_Ux[1][i][j] - local_Ux[1][i+1][j])/dx + (local_Uy[1][i][j] - local_Uy[1][i][j+1])/dy;   
 			r2 = (local_Ux[2][i][j] - local_Ux[2][i+1][j])/dx + (local_Uy[2][i][j] - local_Uy[2][i][j+1])/dy;   
 			r3 = (local_Ux[3][i][j] - local_Ux[3][i+1][j])/dx + (local_Uy[3][i][j] - local_Uy[3][i][j+1])/dy;   
-		
+
 			global_index(flux_ctx.R0.ptr, flux_ctx.R0.pitch, xid, yid, global_border)[0] = r0;//local_Ux[0][i][j]; 		
 			global_index(flux_ctx.R1.ptr, flux_ctx.R1.pitch, xid, yid, global_border)[0] = r1;
 			global_index(flux_ctx.R2.ptr, flux_ctx.R2.pitch, xid, yid, global_border)[0] = r2;
 			global_index(flux_ctx.R3.ptr, flux_ctx.R3.pitch, xid, yid, global_border)[0] = r3;//local_Uy[0][i][j];
-				
+
 			timeStep[0][p] = r;
 
 		}
@@ -413,7 +409,7 @@ __global__ void fluxKernel(int step){
 		}	
 	*/
 		__syncthreads();		
-		
+
 		//First use all threads to reduce min(1024, nthreads) values into 64 values
 		//This first outer test is a compile-time test simply to remove statements if nthreads is less than 512.
 		if (nthreads >= 512) {
@@ -449,10 +445,10 @@ __global__ void fluxKernel(int step){
 			if (nthreads >=  4) B_volatile[p] = fminf(B_volatile[p], B_volatile[p +  2]); //4=>2
 			if (nthreads >=  2) B_volatile[p] = fminf(B_volatile[p], B_volatile[p +  1]); //2=>1
 		}
-		
+
 		if (threadIdx.y + threadIdx.x == 0) flux_ctx.L[blockIdx.x*gridDim.y + blockIdx.y] = B_volatile[0];
 
-	
+
 	}
 
 }
@@ -466,6 +462,82 @@ void callFluxKernel(dim3 grid, dim3 block, int step, FluxKernelArgs* h_ctx){
 
 
 // Set wall boundry condition
+__global__ void setBCPeriodic(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int border){
+
+	int threads = blockDim.x*blockDim.y;	
+
+	float* B_in;
+	float* B_out;
+
+	int nx = NX-2*border;
+	int ny = NY-2*border;
+
+	int tid = threadIdx.y*blockDim.x+threadIdx.x;
+
+	int kin;
+	int kk;
+
+	// SOUTH
+	for (int b = 0; b < border; b++){
+		B_out = global_index(U.ptr, U.pitch, 0, -1 - b, border);   
+		B_in = global_index(U.ptr, U.pitch, 0, ny -1 - b, border);
+		for (int k = tid; k < nx+border*2; k+=threads){
+			kk = k-border;
+			kin = min(kk,nx-1);
+			kin = max(kin,0);			
+			B_out[kk] = B_in[kin];
+		}
+	}
+
+	// NORTH
+	for (int b = 0; b < border; b++){
+                B_out = global_index(U.ptr, U.pitch, 0, ny + b, border);   
+                B_in = global_index(U.ptr, U.pitch, 0, 0 + b, border);
+		for (int k = tid; k < nx+border*2; k+=threads){
+			kk = k-border;
+			kin = min(kk,nx-1);
+			kin = max(kin,0);			
+			B_out[kk] = B_in[kin];
+		}
+
+        }
+
+	// WEST
+	for (int k = tid; k < ny+border*2; k+= threads){
+		kk = k-border;
+        	B_out = global_index(U.ptr, U.pitch, 0, kk, border); 	
+		kin = min(kk,ny-1);
+		kin = max(kin,0);			
+		for (int b = 0; b < border; b++)
+                	B_out[-1-b] = global_index(U.ptr, U.pitch, nx -1 - b, kin, border)[0];                      
+        }
+
+	// EAST
+        for (int k = tid; k < ny+border*2; k+= threads){
+		kk = k-border;
+                B_out = global_index(U.ptr, U.pitch, nx, kk, border);     
+		kin = min(kk,ny-1);
+		kin = max(kin,0);			
+                for (int b = 0; b < border; b++)
+                        B_out[b] = global_index(U.ptr, U.pitch, 0 + b, kin,border)[0];
+        }
+}
+
+
+void callSetBCPeriodic(dim3 grid, dim3 block, gpu_raw_ptr U, unsigned int NX, unsigned int NY, int border){
+	setBCPeriodic<<<grid, block>>>(U, NX, NY, border);
+}	 
+
+void callCollectiveSetBCPeriodic(dim3 grid, dim3 block, const collBCKernelArgs* arg){
+
+	callSetBCPeriodic(grid, block, arg->U0, arg->NX, arg->NY, arg->global_border); 
+	callSetBCPeriodic(grid, block, arg->U1, arg->NX, arg->NY, arg->global_border);
+        callSetBCPeriodic(grid, block, arg->U2, arg->NX, arg->NY, arg->global_border);
+        callSetBCPeriodic(grid, block, arg->U3, arg->NX, arg->NY, arg->global_border);
+}
+
+
+// Set wall boundry condition
 __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int border){
 
 	int threads = blockDim.x*blockDim.y;	
@@ -475,7 +547,7 @@ __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 
 	int nx = NX-2*border;
 	int ny = NY-2*border;
-	
+
 	int tid = threadIdx.y*blockDim.x+threadIdx.x;
 
 	int kin;
@@ -484,7 +556,7 @@ __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 	// SOUTH
 	for (int b = 0; b < border; b++){
 		B_out = global_index(U.ptr, U.pitch, 0, -1 - b, border);   
-		B_in = global_index(U.ptr, U.pitch, 0, 0 + b, border);
+		B_in = global_index(U.ptr, U.pitch, 0, 0, border);
 		for (int k = tid; k < nx+border*2; k+=threads){
 			kk = k-border;
 			kin = min(kk,nx-1);
@@ -495,16 +567,16 @@ __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 	// NORTH
 	for (int b = 0; b < border; b++){
                 B_out = global_index(U.ptr, U.pitch, 0, ny + b, border);   
-                B_in = global_index(U.ptr, U.pitch, 0, ny - 1 - b, border);
+                B_in = global_index(U.ptr, U.pitch, 0, ny - 1, border);
 		for (int k = tid; k < nx+border*2; k+=threads){
 			kk = k-border;
 			kin = min(kk,nx-1);
 			kin = max(kin,0);			
 			B_out[kk] = B_in[kin];
 		}
-		
+
         }
-	
+
 	// WEST
 	for (int k = tid; k < ny+border*2; k+= threads){
 		kk = k-border;
@@ -512,7 +584,7 @@ __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 		kin = min(kk,nx-1);
 		kin = max(kin,0);			
 		for (int b = 0; b < border; b++)
-                	B_out[-1-b] = global_index(U.ptr, U.pitch, 0 + b, kin, border)[0];                      
+                	B_out[-1-b] = global_index(U.ptr, U.pitch, 0, kin, border)[0];                      
         }
 
 	// EAST
@@ -522,7 +594,7 @@ __global__ void setBCOpen(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 		kin = min(kk,nx-1);
 		kin = max(kin,0);			
                 for (int b = 0; b < border; b++)
-                        B_out[b] = global_index(U.ptr, U.pitch, nx - 1 - b, kin,border)[0];
+                        B_out[b] = global_index(U.ptr, U.pitch, nx - 1, kin,border)[0];
         }
 }
 
@@ -532,15 +604,13 @@ void callSetBCOpen(dim3 grid, dim3 block, gpu_raw_ptr U, unsigned int NX, unsign
 
 
 void callCollectiveSetBCOpen(dim3 grid, dim3 block, const collBCKernelArgs* arg){
-	
+
 	//cudaMemcpyToSymbolAsync(bc_ctx, arg->, sizeof(collBCKernelArgs), 0, cudaMemcpyHostToDevice);	
 	callSetBCOpen(grid, block, arg->U0, arg->NX, arg->NY, arg->global_border); 
 	callSetBCOpen(grid, block, arg->U1, arg->NX, arg->NY, arg->global_border);
         callSetBCOpen(grid, block, arg->U2, arg->NX, arg->NY, arg->global_border);
         callSetBCOpen(grid, block, arg->U3, arg->NX, arg->NY, arg->global_border);
 }
-
-
 
 
 // Set wall boundry condition
@@ -553,7 +623,7 @@ __global__ void setBCWall(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 
 	int nx = NX-2*border;
 	int ny = NY-2*border;
-	
+
 	int tid = threadIdx.y*blockDim.x+threadIdx.x;
 
 	int kin;
@@ -577,9 +647,9 @@ __global__ void setBCWall(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
 			kin = max(kin,0);			
 			B_out[k] = B_in[kin];
 		}
-		
+
         }
-	
+
 	// WEST
 	for (int k = tid-2; k < ny; k+= threads){
 		printf("k: %i", k);
@@ -599,50 +669,6 @@ __global__ void setBCWall(gpu_raw_ptr U, unsigned int NX, unsigned int NY, int b
                         B_out[b] = global_index(U.ptr, U.pitch, nx - 1 - b, kin,border)[0];
         }
 
-/*	if (tid == 0) {
-
-	B_in = global_index(U.ptr, U.pitch, nx-1, ny-1, border);	
-	B_out = global_index(U.ptr, U.pitch, nx + 1, ny + 1, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, nx, ny+1, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, nx+1, ny, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch,nx,ny, border);
-	B_out[0] = B_in[0];
-	
-	B_in = global_index(U.ptr, U.pitch, 0, 0, border);
-	B_out = global_index(U.ptr, U.pitch, -2, -2, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -2, -1, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -1, -2, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -1, -1, border);
-	B_out[0] = B_in[0];
-
-	B_in = global_index(U.ptr, U.pitch, nx-1, 0, border);	
-	B_out = global_index(U.ptr, U.pitch, nx+1, -2, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, nx, -1, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, nx, -2, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, nx + 1, -1, border);
-	B_out[0] = B_in[0];
-
-	B_in = global_index(U.ptr, U.pitch, 0, ny-1, border);	
-	B_out = global_index(U.ptr, U.pitch, -2, ny + 1, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -1, ny, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -2, ny, border);
-	B_out[0] = B_in[0];
-	B_out = global_index(U.ptr, U.pitch, -1, ny + 1, border);
-	B_out[0] = B_in[0];
-
-	}
-*/
 }
 
 void callSetBCWall(dim3 grid, dim3 block, gpu_raw_ptr U, unsigned int NX, unsigned int NY, int border){
@@ -651,11 +677,9 @@ void callSetBCWall(dim3 grid, dim3 block, gpu_raw_ptr U, unsigned int NX, unsign
 
 
 void callCollectiveSetBCWall(dim3 grid, dim3 block, const collBCKernelArgs* arg){
-	
-	//cudaMemcpyToSymbolAsync(bc_ctx, arg->, sizeof(collBCKernelArgs), 0, cudaMemcpyHostToDevice);	
+
 	callSetBCWall(grid, block, arg->U0, arg->NX, arg->NY, arg->global_border); 
 	callSetBCWall(grid, block, arg->U1, arg->NX, arg->NY, arg->global_border);
         callSetBCWall(grid, block, arg->U2, arg->NX, arg->NY, arg->global_border);
         callSetBCWall(grid, block, arg->U3, arg->NX, arg->NY, arg->global_border);
 }
-

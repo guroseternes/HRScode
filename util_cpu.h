@@ -77,7 +77,7 @@ inline void set_dt_args(DtKernelArgs* args, float* L, float* dt, unsigned int nE
 }
 
 
-inline void set_flux_args(FluxKernelArgs* args, float* L, gpu_raw_ptr U0, gpu_raw_ptr U1, gpu_raw_ptr U2, gpu_raw_ptr U3, gpu_raw_ptr R0, gpu_raw_ptr R1, gpu_raw_ptr R2, gpu_raw_ptr R3, unsigned int nx, unsigned int ny, int border, float dx, float dy, float theta, float gamma){
+inline void set_flux_args(FluxKernelArgs* args, float* L, gpu_raw_ptr U0, gpu_raw_ptr U1, gpu_raw_ptr U2, gpu_raw_ptr U3, gpu_raw_ptr R0, gpu_raw_ptr R1, gpu_raw_ptr R2, gpu_raw_ptr R3, unsigned int nx, unsigned int ny, int border, float dx, float dy, float theta, float gamma, int innerDimX, int innerDimY){
 	args->L = L; 	
 
 	args->U0 = U0;
@@ -98,6 +98,9 @@ inline void set_flux_args(FluxKernelArgs* args, float* L, gpu_raw_ptr U0, gpu_ra
 
 	args->gamma = gamma;
 	args->theta = theta;
+
+	args->innerDimX = innerDimX;
+	args->innerDimY = innerDimY;
 
 }
 
